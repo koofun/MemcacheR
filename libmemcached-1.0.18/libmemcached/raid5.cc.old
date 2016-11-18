@@ -1,0 +1,532 @@
+#include "libmemcached/common.h"
+#include <sys/time.h>
+extern int count_test1,count_test2,count_test3,count_test4;
+char* get_checksum(const char *value1,const char *value2,const char *value3,int length)
+{
+  char *result;
+  result=(char*)malloc(length*sizeof(char));
+  int i=0;
+  for(i=0;i<length;i++)
+  {
+     if(value1[i]=='@')//restore key
+     {
+        result[i]=(127)^value2[i]^value3[i];
+     
+     }
+    else if(value2[i]=='@')//restore key
+     {
+        result[i]=(127)^value1[i]^value3[i];
+     
+     }
+     else if(value3[i]=='@')//restore key
+     {
+        result[i]=(127)^value2[i]^value1[i];
+     
+     }
+     else // just compute p
+     {
+         result[i]=value1[i]^value2[i]^value3[i];
+          if(result[i]==127) result[i]='@'; //because 127 in ascii talbe can not print,so we use @ to replace it.
+     }
+  }
+  result[i]='\0';
+  return result; 
+}
+
+check_item* set_checksum(struct check_item *item_list,memcached_st *shell)
+{
+//  printf("in set_checksum\n");
+if(item_list==NULL) {return NULL;}
+  memcached_return_t error;
+  uint32_t flags;
+  size_t val_len;
+  check_item *head=item_list;
+  int n_key=strlen(item_list->key);
+  int n_value=strlen(item_list->value);
+  char key0[n_key+1],key1[n_key+1],key2[n_key+1],key3[n_key+1];//need to delete,save space
+  char tmp_keyA[n_key+1],tmp_keyB[n_key+1],tmp_keyC[n_key+1];//need to delete,save space
+  char value0[n_value+1],value1[n_value+1],value2[n_value+1],value3[n_value+1];
+  char tmp_valueA[n_value+1],tmp_valueB[n_value+1],tmp_valueC[n_value+1];
+  int flag,flag0,flag1,flag2,flag3;
+  flag=flag0=flag1=flag2=flag3=0;
+  static int server=0;
+  static int check_num=0;
+  /*memcpy(key0,0,strlen(key0));
+  memcpy(key1,0,strlen(key1));
+  memcpy(key2,0,strlen(key2));
+  memcpy(value0,0,strlen(value0));
+  memcpy(value1,0,strlen(value1));
+  memcpy(value2,0,strlen(value2));*/
+  while(item_list)
+  {
+     if(item_list->server_id==0&&flag0==0)//get the first item in server0
+     {
+       strncpy(key0,item_list->key,n_key);
+        //strcpy(key0,item_list->key);
+        key0[n_key]='\0';
+        strncpy(value0,item_list->value,n_value);
+        value0[n_value]='\0';
+        flag0=1;
+     }
+     else if(item_list->server_id==1&&flag1==0)//get the first item in server1
+     {
+        strncpy(key1,item_list->key,n_key);
+        key1[n_key]='\0';
+        strncpy(value1,item_list->value,n_value);
+        value1[n_value]='\0';
+        flag1=1;
+     }
+     else if(item_list->server_id==2&&flag2==0)//get the first item in server2
+     {
+        strncpy(key2,item_list->key,n_key);
+        key2[n_key]='\0';
+        strncpy(value2,item_list->value,n_value);
+        value2[n_value]='\0';
+        flag2=1;
+     }
+     else if(item_list->server_id==3&&flag3==0)//get the first item in server3
+     {
+        strncpy(key3,item_list->key,n_key);
+        key3[n_key]='\0';
+        strncpy(value3,item_list->value,n_value);
+        value3[n_value]='\0';
+        flag3=1;
+     }
+//printf("flag0=%d,flag1=%d,flag2=%d,flag3=%d\n",flag0,flag1,flag2,flag3);
+     if(server==0&&flag0==1&&flag1==1&&flag2==1)// checksum in server3
+     {
+         // printf("444444444444444server=3\n");
+          strncpy(tmp_keyA,key0,n_key+1);strncpy(tmp_valueA,value0,n_value+1);//tmp_keyA[10]='\0';
+          strncpy(tmp_keyB,key1,n_key+1);strncpy(tmp_valueB,value1,n_value+1);//tmp_keyB[10]='\0';
+          strncpy(tmp_keyC,key2,n_key+1);strncpy(tmp_valueC,value2,n_value+1);//tmp_keyC[10]='\0';
+          flag=1;server=3;
+          break;
+      }
+      else if(server==3&&flag0==1&&flag1==1&&flag3==1)// checksum in server2
+     {
+         // printf("5555555555555server=2\n");
+          strncpy(tmp_keyA,key0,n_key+1);strncpy(tmp_valueA,value0,n_value+1);//tmp_keyA[10]='\0';
+          strncpy(tmp_keyB,key1,n_key+1);strncpy(tmp_valueB,value1,n_value+1);//tmp_keyB[10]='\0';
+          strncpy(tmp_keyC,key3,n_key+1);strncpy(tmp_valueC,value3,n_value+1);//tmp_keyC[10]='\0';
+          flag=1;server=2;
+          break;
+      }
+      else if(server==2&&flag0==1&&flag2==1&&flag3==1)// checksum in server1
+     {
+         //printf("66666666666666server=1\n");
+	  strncpy(tmp_keyA,key0,n_key+1);strncpy(tmp_valueA,value0,n_value+1);//tmp_keyA[10]='\0';
+          strncpy(tmp_keyB,key2,n_key+1);strncpy(tmp_valueB,value2,n_value+1);//tmp_keyB[10]='\0';
+          strncpy(tmp_keyC,key3,n_key+1);strncpy(tmp_valueC,value3,n_value+1);//tmp_keyC[10]='\0';
+          flag=1;server=1;
+          break;
+      }
+     else if(server==1&&flag1==1&&flag2==1&&flag3==1)// checksum in server0
+     {
+         // printf("77777777777777server=0\n");
+	  strncpy(tmp_keyA,key1,n_key+1);strncpy(tmp_valueA,value1,n_value+1);//tmp_keyA[10]='\0';
+          strncpy(tmp_keyB,key2,n_key+1);strncpy(tmp_valueB,value2,n_value+1);//tmp_keyB[10]='\0';
+          strncpy(tmp_keyC,key3,n_key+1);strncpy(tmp_valueC,value3,n_value+1);//tmp_keyC[10]='\0';
+          flag=1;server=0;
+          break;
+      }
+
+     item_list=item_list->next;
+  }
+  //printf("####################p_server=%d,flag=%d\n",server,flag);
+  item_list=head;//point to list head
+  if(flag)//get the all the stripe info,count checksum and store to server
+  {
+//check_num++;
+//printf("check_num=%d\n",check_num);
+    char *check_key,*check_value,*str1,*str2,*str3;
+    char temp_key[n_key+2];
+    
+    check_key=get_checksum(tmp_keyA,tmp_keyB,tmp_keyC,n_key);//get check_key
+    check_key[n_key]='\0';
+    check_value=get_checksum(tmp_valueA,tmp_valueB,tmp_valueC,n_value);//get check_value
+    check_value[n_value]='\0';
+    int count=server;
+  //printf("tmp_keyA=%s,tmp_keyB=%s,tmp_keyC=%s\n",tmp_keyA,tmp_keyB,tmp_keyC);
+ // printf("tmp_valueA=%s,tmp_valueB=%s,tmp_valueC=%s\n",tmp_valueA,tmp_valueB,tmp_valueC);
+    memcached_send_check(shell,check_key,n_key,check_value,n_value,3600,0,0,count);//store checksum
+    //set sms info
+    strncpy(temp_key,tmp_keyB,n_key);temp_key[n_key]=count+'0';temp_key[n_key+1]=0;
+    memcached_send_meta(shell,tmp_keyA,n_key,temp_key,n_key+1,3600,0,0);//store stripe info and p_server_id
+    strncpy(temp_key,tmp_keyC,n_key);temp_key[n_key]=count+'0';temp_key[n_key+1]=0;
+    memcached_send_meta(shell,tmp_keyB,n_key,temp_key,n_key+1,3600,0,0);//store stripe info and p_server_id
+    strncpy(temp_key,tmp_keyA,n_key);temp_key[n_key]=count+'0';temp_key[n_key+1]=0;
+    memcached_send_meta(shell,tmp_keyC,n_key,temp_key,n_key+1,3600,0,0);//store stripe info and p_server_id
+   
+
+    
+    
+    //delete three item in list
+    item_list=del_item(item_list,tmp_keyA);
+    item_list=del_item(item_list,tmp_keyB);
+    item_list=del_item(item_list,tmp_keyC);
+  }
+  /*else//get the part of the stripe info
+  {
+     printf("cannot find a stripe\n");//Todo
+  }*/
+
+  return item_list;
+}
+
+check_item* add_citem(struct check_item *item_array,uint32_t server_key,const char *key,const char *value)
+{
+   check_item *c_item,*head;
+  c_item=NULL;
+  head=item_array;
+  c_item=(check_item *)malloc(sizeof(check_item));
+  c_item->server_id=server_key;
+  int n_key,n_value;
+  n_key=strlen(key);
+  n_value=strlen(value);
+  strncpy(c_item->key,key,n_key);//
+  c_item->key[n_key]='\0';
+  strncpy(c_item->value,value,n_value);//memcpy(c_item->value,value,sizeof(value))
+  c_item->value[n_value]='\0'; 
+   /* if(server_key==0) c_item->index=count_test1;
+    else if(server_key==1) c_item->index=count_test2;
+    else if(server_key==2) c_item->index=count_test3;
+    else if(server_key==3) c_item->index=count_test4;*/
+  c_item->next=NULL;
+  if(item_array==NULL)
+  {
+     item_array=c_item;
+     //head=item_array;
+  }
+  else
+  {
+    //check_item *head=item_array;
+    while(head->next)
+    {
+       head=head->next;
+    }
+    head->next=c_item;
+  }
+  return item_array;
+}
+
+check_item* del_item(struct check_item *item_list,char *key)
+{
+    //printf("in del_item\n");
+    check_item *head,*prev,*del;
+    head=item_list;prev=item_list;
+    while(head)
+   {
+      if(strcmp(head->key,key)==0)
+        break;
+      prev=head;
+      head=head->next;
+   }
+   if(head==NULL)  { printf("cannot find the item\n");return item_list;}
+   if(head==item_list) 
+   {//printf("del first item key=%s\n",item_list->key);
+     item_list=prev->next; 
+    }//
+   else 
+   { //printf("del  item key=%s\n",head->key);
+     del=head;
+     prev->next=del->next;
+     free(del); del=NULL;
+    }
+    return item_list;
+}
+
+int update_checkcum(memcached_st *shell,const char *key,const char *new_value,char *old_value)
+{
+  if(key==NULL) return -1;
+  char *key1,*key2,*key_p,*value1,*value2,*value_p;
+  key1=key2=key_p=NULL;value1=value2=value_p=NULL;
+  int server_p;//the id of check_sum
+  size_t key_length=strlen(key);
+  int len=strlen(new_value);//the same as old value
+  size_t *v_length=NULL;
+  uint32_t flags;
+  size_t *value_length=NULL;
+  memcached_return_t *error=NULL;
+//printf("key=%s,old_value=%s\n",key,old_value);
+//printf("key=%s,new_value=%s\n",key,new_value);
+  if((key1=memcached_degrade_get_by_key(shell, NULL, 0, key, key_length, v_length,&flags, error,-1))!=NULL)//get key1
+  {
+
+//value1=memcached_get_by_key(shell, NULL, 0, key1, key_length, value_length,&flags, error);
+//printf("key1=%s,value1=%s\n",key1,value1);
+     if((key2=memcached_degrade_get_by_key(shell, NULL, 0, key1, key_length, v_length,&flags, error,-1))!=NULL)//get key2
+     {
+//value2=memcached_get_by_key(shell, NULL, 0, key2, key_length, value_length,&flags, error);
+//printf("key2=%s,value2=%s\n",key2,value2);
+	key_p=get_checksum(key,key1,key2,key_length);//get check_key
+        server_p=key1[key_length]-'0';
+        if((value_p=memcached_degrade_get_by_key(shell, NULL, 0, key_p, key_length, v_length,&flags, error,server_p))!=NULL)// get value_p
+        {
+	  //printf("value_p=%s\n",value_p);
+	  char *new_value_p=get_checksum(new_value,old_value,value_p,len);
+	  //printf("value_p=%s\n",new_value_p);
+	  memcached_send_check(shell,key_p,key_length,new_value_p,len,3600,0,0,server_p);//store checksum
+	}
+      }
+  }
+  if(key1==NULL||key2==NULL||value_p==NULL)
+  {
+     //printf("update check_sum failed!\n");
+     return -1;
+  }
+  return 0;
+}
+
+void display(struct check_item *item_array)
+{
+  check_item *head=item_array;
+  while(head)
+  {
+    
+    printf("head->server_id=%d,head->key=%s,head->value=%s\n",head->server_id,head->key,head->value);
+    head=head->next;
+  }
+}
+
+memcached_return_t memcached_send_check(memcached_st *shell,
+                                                const char *key, size_t key_length,
+                                                const char *value, size_t value_length,
+                                                const time_t expiration,
+                                                const uint32_t flags,
+                                                const uint64_t cas,
+                                                int count)
+{
+  Memcached* ptr= memcached2Memcached(shell);
+  memcached_return_t rc;
+  if (memcached_failed(rc= initialize_query(ptr, true)))
+  {
+    return rc;
+  }
+  if (memcached_failed(memcached_key_test(*ptr, (const char **)&key, &key_length, 1)))
+  {
+    return memcached_last_error(ptr);
+  }
+  uint32_t server_key_check=count;//
+  memcached_instance_st* instance_check= memcached_instance_fetch(ptr, server_key_check);
+
+  WATCHPOINT_SET(instance_check->io_wait_count.read= 0);
+  WATCHPOINT_SET(instance_check->io_wait_count.write= 0);
+
+  bool flush= true;
+  if (memcached_is_buffering(instance_check->root))
+  {
+printf("5555555555555flush is false5555555555555\n");
+    flush= false;
+  }
+
+  bool reply= memcached_is_replying(ptr);
+
+  hashkit_string_st* destination= NULL;
+
+  if (memcached_is_encrypted(ptr))
+  {
+    
+    if ((destination= hashkit_encrypt(&ptr->hashkit, value, value_length)) == NULL)
+    {
+      return rc;
+    }
+    value= hashkit_string_c_str(destination);
+    value_length= hashkit_string_length(destination);
+  }
+
+  if (memcached_is_binary(ptr))
+  {
+    /*rc= memcached_send_binary(ptr, instance_check, server_key_check,
+                              key, key_length,
+                              value, value_length, expiration,
+                              flags, cas, flush, reply, 0);*/
+   //we don't support
+  }
+  else
+  {
+    rc= memcached_send_ascii_check(ptr, instance_check,
+                             key, key_length,
+                             value, value_length, expiration,
+                             flags, cas, flush, reply);
+    
+   }
+
+  hashkit_string_free(destination);
+
+  return rc;
+}
+
+memcached_return_t memcached_send_meta(memcached_st *shell,
+                                                const char *key, size_t key_length,
+                                                const char *value, size_t value_length,
+                                                const time_t expiration,
+                                                const uint32_t flags,
+                                                const uint64_t cas
+                                                )
+{
+  Memcached* ptr= memcached2Memcached(shell);
+  memcached_return_t rc;
+  if (memcached_failed(rc= initialize_query(ptr, true)))
+  {
+    return rc;
+  }
+  if (memcached_failed(memcached_key_test(*ptr, (const char **)&key, &key_length, 1)))
+  {
+    return memcached_last_error(ptr);
+  }
+  //store the sms info in the next server after the key
+  uint32_t server_key= memcached_generate_hash_with_redistribution(ptr, key, key_length);
+  uint32_t server_key_meta=(server_key+1)%memcached_server_count(ptr);
+  memcached_instance_st* instance_meta= memcached_instance_fetch(ptr, server_key_meta);
+
+  WATCHPOINT_SET(instance_meta->io_wait_count.read= 0);
+  WATCHPOINT_SET(instance_meta->io_wait_count.write= 0);
+
+  bool flush= true;
+  if (memcached_is_buffering(instance_meta->root))
+  {
+printf("5555555555555flush is false5555555555555\n");
+    flush= false;
+  }
+
+  bool reply= memcached_is_replying(ptr);
+
+  hashkit_string_st* destination= NULL;
+
+  if (memcached_is_encrypted(ptr))
+  {
+    
+    if ((destination= hashkit_encrypt(&ptr->hashkit, value, value_length)) == NULL)
+    {
+      return rc;
+    }
+    value= hashkit_string_c_str(destination);
+    value_length= hashkit_string_length(destination);
+  }
+
+  if (memcached_is_binary(ptr))
+  {
+    /*rc= memcached_send_binary(ptr, instance_check, server_key_meta,
+                              key, key_length,
+                              value, value_length, expiration,
+                              flags, cas, flush, reply, 0);*/
+   //we don't support
+  }
+  else
+  {
+    rc= memcached_send_ascii_check(ptr, instance_meta,
+                             key, key_length,
+                             value, value_length, expiration,
+                             flags, cas, flush, reply);
+    
+   }
+
+  hashkit_string_free(destination);
+
+  return rc;
+}
+
+memcached_return_t memcached_send_ascii_check(Memcached *ptr,
+                                               memcached_instance_st* instance,
+                                               const char *key,
+                                               const size_t key_length,
+                                               const char *value,
+                                               const size_t value_length,
+                                               const time_t expiration,
+                                               const uint32_t flags,
+                                               const uint64_t cas,
+                                               const bool flush,
+                                               const bool reply)
+{
+  char flags_buffer[MEMCACHED_MAXIMUM_INTEGER_DISPLAY_LENGTH +1];
+  int flags_buffer_length= snprintf(flags_buffer, sizeof(flags_buffer), " %u", flags);
+  if (size_t(flags_buffer_length) >= sizeof(flags_buffer) or flags_buffer_length < 0)
+  {
+    return memcached_set_error(*instance, MEMCACHED_MEMORY_ALLOCATION_FAILURE, MEMCACHED_AT, 
+                               memcached_literal_param("snprintf(MEMCACHED_MAXIMUM_INTEGER_DISPLAY_LENGTH)"));
+  }
+
+  char expiration_buffer[MEMCACHED_MAXIMUM_INTEGER_DISPLAY_LENGTH +1];
+  int expiration_buffer_length= snprintf(expiration_buffer, sizeof(expiration_buffer), " %llu", (unsigned long long)expiration);
+  if (size_t(expiration_buffer_length) >= sizeof(expiration_buffer) or expiration_buffer_length < 0)
+  {
+    return memcached_set_error(*instance, MEMCACHED_MEMORY_ALLOCATION_FAILURE, MEMCACHED_AT, 
+                               memcached_literal_param("snprintf(MEMCACHED_MAXIMUM_INTEGER_DISPLAY_LENGTH)"));
+  }
+
+  char value_buffer[MEMCACHED_MAXIMUM_INTEGER_DISPLAY_LENGTH +1];
+  int value_buffer_length= snprintf(value_buffer, sizeof(value_buffer), " %llu", (unsigned long long)value_length);
+  if (size_t(value_buffer_length) >= sizeof(value_buffer) or value_buffer_length < 0)
+  {
+    return memcached_set_error(*instance, MEMCACHED_MEMORY_ALLOCATION_FAILURE, MEMCACHED_AT, 
+                               memcached_literal_param("snprintf(MEMCACHED_MAXIMUM_INTEGER_DISPLAY_LENGTH)"));
+  }
+
+  char cas_buffer[MEMCACHED_MAXIMUM_INTEGER_DISPLAY_LENGTH +1];
+  int cas_buffer_length= 0;
+  if (cas)
+  {
+    cas_buffer_length= snprintf(cas_buffer, sizeof(cas_buffer), " %llu", (unsigned long long)cas);
+    if (size_t(cas_buffer_length) >= sizeof(cas_buffer) or cas_buffer_length < 0)
+    {
+      return memcached_set_error(*instance, MEMCACHED_MEMORY_ALLOCATION_FAILURE, MEMCACHED_AT, 
+                                 memcached_literal_param("snprintf(MEMCACHED_MAXIMUM_INTEGER_DISPLAY_LENGTH)"));
+    }
+  }
+
+  libmemcached_io_vector_st vector[]=
+  {
+    { NULL, 0 },
+    { "set ", strlen("set ")},
+    { memcached_array_string(ptr->_namespace), memcached_array_size(ptr->_namespace) },
+    { key, key_length },
+    { flags_buffer, size_t(flags_buffer_length) },
+    { expiration_buffer, size_t(expiration_buffer_length) },
+    { value_buffer, size_t(value_buffer_length) },
+    { cas_buffer, size_t(cas_buffer_length) },
+    { " noreply", reply ? 0 : memcached_literal_param_size(" noreply") },
+    { memcached_literal_param("\r\n") },
+    { value, value_length },
+    { memcached_literal_param("\r\n") }
+  };
+
+  /* Send command header */
+  memcached_return_t rc=  memcached_vdo(instance, vector, 12, flush);
+
+  // If we should not reply, return with MEMCACHED_SUCCESS, unless error
+  if (reply == false)
+  {
+    return memcached_success(rc) ? MEMCACHED_SUCCESS : rc; 
+  }
+
+  if (flush == false)
+  {
+    return memcached_success(rc) ? MEMCACHED_BUFFERED : rc; 
+  }
+
+  if (rc == MEMCACHED_SUCCESS)
+  {
+    char buffer[MEMCACHED_DEFAULT_COMMAND_SIZE];
+    rc= memcached_response(instance, buffer, sizeof(buffer), NULL);
+
+    if (rc == MEMCACHED_STORED)
+    {
+      return MEMCACHED_SUCCESS;
+    }
+  }
+
+  if (rc == MEMCACHED_WRITE_FAILURE)
+  {
+    memcached_io_reset(instance);
+  }
+
+  assert(memcached_failed(rc));
+#if 0
+  if (memcached_has_error(ptr) == false)
+  {
+    return memcached_set_error(*ptr, rc, MEMCACHED_AT);
+  }
+#endif
+
+  return rc;
+}

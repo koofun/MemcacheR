@@ -1,0 +1,37 @@
+/*add a raid5 function*/
+#pragma once
+struct temp_item
+{
+  int server_id;//the server item is stored
+  char *key;
+  char *value;
+  struct temp_item *next; 
+};
+//temp_item *item_curr,*item_tail;
+struct check_item
+{
+  //int index;//in order
+  uint32_t server_id;//fixed server,e.g. the last server
+  char *key;
+  char *value;
+  struct  check_item *next;
+ /*check_item()
+  {
+    index=0;
+    server_id=0;
+    key=(char *)malloc(sizeof(char)*10);
+    memcpy(key,0,sizeof(key));
+    value=(char *)malloc(sizeof(char)*3);
+    memcpy(value,0,sizeof(value));
+  }*/
+ /* check_item(int index,uint32_t server_id,const char *key,const char *value)
+  {
+     this->index=index;
+     this->server_id=server_id;
+     memcpy(this->key,key,sizeof(key));
+     memcpy(this->value,value,sizeof(value));
+  }*/
+};
+
+char* get_checksum(const char *value1,const char *value2,const char *value3,int length);
+void add_citem(struct check_item *item_array,uint32_t server_key,const char *key,const char *value);
