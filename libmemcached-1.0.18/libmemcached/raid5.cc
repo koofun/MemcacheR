@@ -1,5 +1,6 @@
 #include "libmemcached/common.h"
 #include "../libhashkit/common.h"
+#include <pthread.h>
 extern uint32_t count_check0,count_check1,count_check2,count_check3;
 #define  COUNT  4
 #define HASH_MAX_SIZE 1000003
@@ -56,6 +57,7 @@ check_item* set_checksum(struct check_item *item_list,memcached_st *shell)
   for(int i=0;i<COUNT;i++) flag[i]=0;
   static int server=0;
   static int check_num=0;
+  char keys[3*n_key+2];//3 keys
   while(item_list)
   {
      if(item_list->server_id==0&&flag[0]==0)//get the first item in server0
@@ -166,6 +168,18 @@ check_item* set_checksum(struct check_item *item_list,memcached_st *shell)
     hv=hashkit_jenkins(tmp_key[2],n_key,0);//get hashkey 
     Hashtable_Insert_Node(hn,hv);//insert node to hashtable
     
+    //get all the keys,then send to backup
+    for(int i=0;i<3;i++)
+    {
+        for(int j=0;j<n_key;j++)
+       {
+          keys[i*n_key+j]=tmp_key[i][j];
+       }
+    }
+    keys[3*n_key]='0'+count;
+    keys[3*n_key+1]='\0';
+    printf("----------keys=%s\n---",keys);
+    send_keys(keys);//send keys to other client ,insert to hashtable
 //printf("----------------------------------\n");
     item_list=del_item(item_list,tmp_key[0]);
     item_list=del_item(item_list,tmp_key[1]);
@@ -788,6 +802,8 @@ void Hashtable_Init()
 {
   printf("init hashtable...\n");
   memset(hashtable,0,sizeof(HashNode*)*HASH_MAX_SIZE);
+  pthread_t thd;
+  pthread_create(&thd,NULL,recv_keys,(void*)NULL);
 }
 
 uint32_t Get_HashCode(const char *key)
@@ -878,4 +894,111 @@ void Hashtable_Remove(const char *key,uint32_t hv)
 		ht=NULL;
 	}
 }
+
+void store_keys(const char *keys,int n_keys)
+{
+   int len=(n_keys-1)/3;
+   char key1[len+1];
+   char key2[len+2];
+   printf("keys=%s\n",keys);
+     
+   
+   strncpy(key1,keys,len);key1[len]='\0';
+   strncpy(key2,keys+len,len);
+   key2[len]=keys[n_keys-1];
+   key2[len+1]='\0';
+    struct HashNode* hn=NULL;
+    hn=Init_Node(key1,key2);
+    uint32_t hv=hashkit_jenkins(key1,len,0);//get hashkey 
+    Hashtable_Insert_Node(hn,hv);//insert node to hashtable
+
+    printf("--------key1=%s,key2=%s\n",key1,key2);
+    strncpy(key1,key2,len);key1[len]='\0';
+    strncpy(key2,keys+2*len,len);
+    key2[len]=keys[n_keys-1];
+    key2[len+1]='\0';
+
+    hn=Init_Node(key1,key2);
+    hv=hashkit_jenkins(key1,len,0);//get hashkey 
+    Hashtable_Insert_Node(hn,hv);//insert node to hashtable
+
+    printf("--------key1=%s,key2=%s\n",key1,key2);
+    strncpy(key1,key2,len);key1[len]='\0';
+    strncpy(key2,keys,len);
+    key2[len]=keys[n_keys-1];
+    key2[len+1]='\0';
+
+    hn=Init_Node(key1,key2);
+    hv=hashkit_jenkins(key1,len,0);//get hashkey 
+    Hashtable_Insert_Node(hn,hv);//insert node to hashtable
+    printf("--------key1=%s,key2=%s\n",key1,key2);
+}
+
+void  send_keys(char *keys)
+{
+   
+    struct sockaddr_in servaddr;
+    int sockfd;
+    if((sockfd=socket(AF_INET,SOCK_STREAM,0))<=0)
+    {
+         printf("create socket error\n");
+         return;
+    }
+    memset(&servaddr,0,sizeof(servaddr));
+    servaddr.sin_family=AF_INET;
+    servaddr.sin_port=htons(1840);
+    if(inet_pton(AF_INET,"192.168.132.159",&servaddr.sin_addr)<=0)
+    {
+       printf("inet_pton error\n");
+       return ;
+     }
+    if(connect(sockfd,(struct sockaddr*)&servaddr,sizeof(servaddr))<0)
+    {
+         printf("connect error\n");
+         return ;
+     }
+    printf("keys==%s\n",keys);
+    send(sockfd,keys,strlen(keys),0);
+    close(sockfd);
+}
+
+//recv other client send keys
+void* recv_keys(void*)
+{
+    int listenfd,connfd;
+    struct sockaddr_in servaddr;
+    if((listenfd=socket(AF_INET,SOCK_STREAM,0))==-1)
+    {
+       printf("socket create error\n");
+       return NULL;
+     }
+     memset(&servaddr,0,sizeof(servaddr));
+     servaddr.sin_family=AF_INET;
+     servaddr.sin_addr.s_addr=htonl(INADDR_ANY);
+     servaddr.sin_port=htons(1841);
+     if(bind(listenfd,(struct sockaddr*)&servaddr,sizeof(servaddr))==-1)
+     {
+       printf("bind sock error\n");
+       return NULL;
+     }
+     if(listen(listenfd,10)==-1)
+     {
+          printf("listen error\n");
+          return NULL;
+      }
+       int n_keys=0;
+       char keys_buff[1025];
+       while(1)
+       {
+            if((connfd=accept(listenfd,(struct sockaddr*)NULL,NULL))==-1)
+             {
+	         printf("accept error\n");continue;
+	     }
+            n_keys=recv(connfd,keys_buff,1025,0);
+            keys_buff[n_keys]='\0';
+            store_keys(keys_buff,n_keys);
+       } 
+    close(listenfd);
+}
+
 

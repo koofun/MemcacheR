@@ -2895,18 +2895,18 @@ AUTOHEADER = ${SHELL} /home/wufeng/libmemcached-1.0.18/build-aux/missing autohea
 AUTOHEADER_FILE = mem_config.h
 AUTOMAKE = ${SHELL} /home/wufeng/libmemcached-1.0.18/build-aux/missing automake-1.13
 AWK = mawk
-CC = cc -std=gnu99
+CC = cc -std=gnu99 -lpthread
 CCDEPMODE = depmode=gcc3
 CC_VERSION = cc (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3
 CC_VERSION_VENDOR = gnu
-CFLAGS = -g -O2  -Wno-unknown-pragmas -Wno-pragmas -Wall -Wextra -Wunsuffixed-float-constants -Wjump-misses-init -Wno-attributes -Waddress -Warray-bounds -Wbad-function-cast -Wchar-subscripts -Wcomment -Wfloat-equal -Wformat-security -Wformat=2 -Wformat-y2k -Wlogical-op -Wmissing-field-initializers -Wmissing-noreturn -Wmissing-prototypes -Wnested-externs -Wnormalized=id -Woverride-init -Wpointer-arith -Wpointer-sign -Wredundant-decls -Wshadow -Wsign-compare -Wstrict-overflow=1 -Wswitch-enum -Wtrampolines -Wundef -Wunsafe-loop-optimizations -funsafe-loop-optimizations -Wclobbered -Wunused -Wunused-result -Wunused-variable -Wunused-parameter -Wwrite-strings -fwrapv -pipe -fPIE -pie -Wpacked
+CFLAGS = -lpthread -g -O2  -Wno-unknown-pragmas -Wno-pragmas -Wall -Wextra -Wunsuffixed-float-constants -Wjump-misses-init -Wno-attributes -Waddress -Warray-bounds -Wbad-function-cast -Wchar-subscripts -Wcomment -Wfloat-equal -Wformat-security -Wformat=2 -Wformat-y2k -Wlogical-op -Wmissing-field-initializers -Wmissing-noreturn -Wmissing-prototypes -Wnested-externs -Wnormalized=id -Woverride-init -Wpointer-arith -Wpointer-sign -Wredundant-decls -Wshadow -Wsign-compare -Wstrict-overflow=1 -Wswitch-enum -Wtrampolines -Wundef -Wunsafe-loop-optimizations -funsafe-loop-optimizations -Wclobbered -Wunused -Wunused-result -Wunused-variable -Wunused-parameter -Wwrite-strings -fwrapv -pipe -fPIE -pie -Wpacked
 CFLAG_VISIBILITY = -fvisibility=hidden
 CPP = cc -E
-CPPFLAGS =  -fvisibility=hidden
+CPPFLAGS =  -fvisibility=hidden  -lpthread
 CXX = c++ -std=c++0x
 CXXCPP = c++ -E
 CXXDEPMODE = depmode=gcc3
-CXXFLAGS = -g -O2 -Wno-unknown-pragmas -Wno-pragmas -Wall -Wextra -Wno-attributes -Waddress -Warray-bounds -Wchar-subscripts -Wcomment -Wctor-dtor-privacy -Wfloat-equal -Wformat=2 -Wformat-y2k -Wmissing-field-initializers -Wlogical-op -Wnon-virtual-dtor -Wnormalized=id -Woverloaded-virtual -Wpointer-arith -Wredundant-decls -Wshadow -Wsign-compare -Wstrict-overflow=1 -Wswitch-enum -Wtrampolines -Wundef -Wunsafe-loop-optimizations -funsafe-loop-optimizations -Wclobbered -Wunused -Wunused-result -Wunused-variable -Wunused-parameter -Wwrite-strings -Wformat-security -fwrapv -pipe -fPIE -pie -Wpacked
+CXXFLAGS = -lpthread -g -O2 -Wno-unknown-pragmas -Wno-pragmas -Wall -Wextra -Wno-attributes -Waddress -Warray-bounds -Wchar-subscripts -Wcomment -Wctor-dtor-privacy -Wfloat-equal -Wformat=2 -Wformat-y2k -Wmissing-field-initializers -Wlogical-op -Wnon-virtual-dtor -Wnormalized=id -Woverloaded-virtual -Wpointer-arith -Wredundant-decls -Wshadow -Wsign-compare -Wstrict-overflow=1 -Wswitch-enum -Wtrampolines -Wundef -Wunsafe-loop-optimizations -funsafe-loop-optimizations -Wclobbered -Wunused -Wunused-result -Wunused-variable -Wunused-parameter -Wwrite-strings -Wformat-security -fwrapv -pipe -fPIE -pie -Wpacked
 CXX_VERSION = c++ (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3
 CXX_VERSION_VENDOR = gnu
 CYGPATH_W = echo
@@ -2950,8 +2950,8 @@ LIBMEMCACHED_VERSION_HEX = 0x01000018
 LIBMEMCACHED_VERSION_STRING = 1.0.18
 LIBMEMCACHED_WITH_SASL_SUPPORT = #define LIBMEMCACHED_WITH_SASL_SUPPORT 0
 LIBOBJS = 
-LIBS = 
-LIBSASL_CPPFLAGS = 
+LIBS = -lpthread
+LIBSASL_CPPFLAGS = -lpthread
 LIBSASL_LDFLAGS = 
 LIBTEST_VERSION = 1.0
 LIBTOOL = $(SHELL) $(top_builddir)/libtool
@@ -2991,7 +2991,7 @@ PACKAGE_VERSION = 1.0.18
 PATH_SEPARATOR = :
 PERL = perl
 PTHREAD_CC = cc -std=gnu99
-PTHREAD_CFLAGS = -pthread
+PTHREAD_CFLAGS = -lpthread
 PTHREAD_LIBS = 
 RANLIB = ranlib
 RPM = 

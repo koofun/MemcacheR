@@ -38,9 +38,62 @@
 #include <libmemcached/common.h>
 #include <libmemcached/memcached/protocol_binary.h>
 
-memcached_return_t memcached_delete(memcached_st *shell, const char *key, size_t key_length,
-                                    time_t expiration)
+extern struct check_item *item_list;
+memcached_return_t memcached_delete(memcached_st *shell, const char *key, size_t key_length,time_t expiration)
 {
+  Memcached* ptr= memcached2Memcached(shell);
+  char *old_value;
+  char *keyA,*keyB,*valueA,*valueB;
+  char *new_key,*new_value;
+  char *p_key,*p_value;
+  int pserver_id=0;
+  size_t *v_length;
+  uint32_t *flags;
+  memcached_return_t *error;
+  struct check_item *rest_list;
+  rest_list=item_list;
+  
+  if( (keyA=Hashtable_GetValue(key))!=NULL)// in stripe
+  {
+      pserver_id=keyA[key_length]-'0';//get server id
+      if((keyB=Hashtable_GetValue(keyA))!=NULL )//get all other keys in stripe
+      {
+
+           while(rest_list)
+           {
+               if(rest_list->server_id==pserver_id)//find the same server key
+              {
+                  new_key=rest_list->key;
+                  new_value=rest_list->value;
+                  break;
+              }  
+           }
+           if(new_key!=NULL&&new_value!=NULL) //get new item
+           {
+               p_key=get_checksum(key,keyA,keyB,key_length);//compute old p_key
+               p_value=memcached_degrade_get_by_key(ptr, NULL, 0, p_key, key_length, v_length,flags, error,pserver_id);//get p_value
+               old_value=memcached_get_by_key(ptr, NULL, 0, key, key_length, v_length,flags, error);//get the delete value
+               
+               p_value=get_checksum(old_value,p_value,new_value,strlen(p_value));//compute the new p_value
+               p_key=get_checksum(new_key,keyA,keyB,strlen(key));//compute new p_key
+               memcached_send_check(shell,p_key,key_length,p_value,strlen(p_value),3600,0,0,pserver_id);
+              
+              item_list=del_item(item_list,new_key);//delete the item from log_list
+           }
+           else 
+          {
+               //push itemA and itemB back to item_list
+                valueA=memcached_get_by_key(ptr, NULL, 0, keyA, key_length, v_length,flags, error);
+                uint32_t server_id= memcached_generate_hash_with_redistribution(ptr, keyA, key_length);
+                item_list=add_citem(item_list,server_id,keyA,valueA); 
+
+                server_id= memcached_generate_hash_with_redistribution(ptr, keyB, key_length);
+                valueB=memcached_get_by_key(ptr, NULL, 0, keyB, key_length, v_length,flags, error);
+                item_list=add_citem(item_list,server_id,keyB,valueB); 
+          }
+           
+       }
+  }
   return memcached_delete_by_key(shell, key, key_length, key, key_length, expiration);
 }
 

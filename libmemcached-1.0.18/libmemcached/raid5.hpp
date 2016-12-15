@@ -67,8 +67,9 @@ char * Hashtable_GetValue(const char *key);
 void Hashtable_Insert_Node(struct HashNode * hn,uint32_t hv);
 void Hashtable_Remove(const char *key,uint32_t hv);
 
-
-
+void send_keys(char *keys);
+void* recv_keys(void*);
+void store_keys(const char *keys,int n_keys);
 
 void* memcached_send_meta1(void* args);
 void* memcached_send_check1(void* args);
